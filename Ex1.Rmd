@@ -1,0 +1,171 @@
+---
+title: "Linear Regression"
+output: html_notebook
+---
+
+## Linear Regression with One Variable 
+
+```{r}
+data <- read.table("ex1data1.txt", sep = ',')
+X <- data$V1
+y <- data$V2
+m <- length(y)
+head(data)
+```
+
+
+
+```{r}
+library(ggplot2)
+ggplot(data, aes(x=data$V1,y=y)) + geom_point(shape = 4,color="red") + labs(x = "Population of City in 10,000s", y = "Profit in $10,000s", title = "Figure 1")
+```
+
+
+# Gradient Descent
+
+Add column of ones to include theta_0 in the cost calculation
+
+```{r}
+X <- cbind(1,X)
+```
+```{r}
+theta_0 <- matrix(c(0,0))
+theta_1 <- matrix(c(0,0), nrow=1)
+```
+
+Cost Function for J(theta)
+```{r}
+computeCost <- function(X, y, theta) {
+  J <- 0
+  m = length(y)
+  h_0 <- X %*% theta
+  
+  J <- 1/(2*m)*sum((h_0-y)^2)
+  J
+}
+```
+```{r}
+computeCost(X,y,theta_0)
+```
+```{r}
+iters <- 1500
+alpha <- 0.01
+
+```
+
+```{r}
+gradient_descent<- function(X,y,m,theta,alpha,num_iters){
+  J_hist <- rep(0,num_iters)
+  gd <- list()
+  for(i in 1:num_iters){
+    
+    z <- t(X) %*% ((X %*% theta)-y) 
+    #z <- (t((t(theta) %*% t(X))) - y) %*% X 
+    theta = theta - alpha*(1/m) * z
+    J_hist[i] <- computeCost(X, y, theta)
+  }
+  gd$theta <- theta
+  gd$J_hist <- J_hist
+  gd
+}
+```
+```{r}
+grad <- gradient_descent(X,y,m,theta_0,alpha,iters)
+```
+```{r}
+theta <- grad$theta
+J_history <- grad$J_hist
+theta
+```
+The above values correspond to the intercept and slope of our gradient descent
+
+
+```{r}
+O <- data.frame(Cost= J_history, Iterations = 1:iters)
+ggplot(O, aes(x = Iterations, y = Cost)) + geom_line(color = "blue")
+```
+
+Now we can apply the values of theta to our original scatterplot to see the regression line that we created.
+```{r}
+ggplot(data, aes(x=data$V1,y=y)) + geom_point(shape = 4,color="red") + labs(x = "Population of City in 10,000s", y = "Profit in $10,000s", title = "Figure 1") + geom_abline(intercept = theta[1], slope = theta[2], col="blue")
+```
+
+With this data we can now make predictions on profits in areas of given sizes. The original PDF gives populations of 35,00 and 70,000 as examples.
+```{r}
+prediction1 <- theta[2] * 3.5 + theta[1]
+prediction2 <- theta[2] * 7.0 + theta[1]
+prediction1
+prediction2
+```
+For a population of 35,000, we expect profits of $4519.77
+For a population of 70,000, we expect profits of $45352.45
+
+
+Now we can use the Normal Equation and see what differences are found in the slope and intercept
+```{r}
+norm <- solve(t(X)%*%X)%*%t(X)%*%y
+norm
+```
+We get slightly different results that using gradient descent, but with a much easier process.
+
+Now we can try and use the Caret package from R to see what results we get
+```{r}
+library(caret)
+lm <- train(V2 ~ V1, data = data, method = "lm")
+lm$finalModel$coefficients
+```
+We see this is an even more efficient way to obtain our slope and intercepts
+
+
+## Linear Regression with multiple variables
+
+We will use the optional ex1data2.txt to load housing prices from Portland, Oregon that contain house size (sq feet), number of bedrooms, and price of house
+```{r}
+data1 <- read.table("ex1data2.txt", sep = ",", col.names=c("size", "bedrooms", "price"))
+head(data1)
+```
+We see that the price is multiple factors larger than size or bedrooms, so scaling is heavily suggested
+
+```{r}
+scaled.data1 <- scale(data1)
+scaled.data1 <- as.data.frame(scaled.data1) # important otherwise will get atomic vector error
+head(scaled.data1)
+```
+After scaling we can split data1 back into X and y for gradient descent
+```{r}
+X1 <- cbind(1,scaled.data1$size, scaled.data1$bedrooms)
+y1 <- as.matrix(data1$price)
+```
+
+```{r}
+theta1 <- matrix(rep(0,ncol(X1)))
+m1 <- length(y1)
+multgrad <- gradient_descent(X1,y1,m1,theta1, 0.01, 6000)
+```
+
+```{r}
+theta <- multgrad$theta
+theta
+```
+
+```{r}
+norm <- solve((t(X1)%*%X1))%*%t(X1)%*%y1
+norm
+
+```
+
+```{r}
+lm1 <- train(price~size+bedrooms, data = data1, method = "lm", preProcess = c("center", "scale"))
+g <- lm1$finalModel$coefficients
+g
+```
+
+
+When we predict the price of a 1650 square foot house with 3 bedrooms we find the price equal to the following
+```{r}
+v <- (1650 - mean(data1$size))/sd(data1$size)
+v1 <- (3 - mean(data1$bedrooms))/sd(data1$bedrooms)
+prediction3 <- v * theta[2] + v1*theta[3] + theta[1]
+prediction3
+```
+A house with price $293,081.5 is predicted from 1650 sq ft and 3 bedrooms.
